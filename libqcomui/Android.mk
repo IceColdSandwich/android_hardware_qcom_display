@@ -8,9 +8,14 @@ LOCAL_SHARED_LIBRARIES := \
         libutils \
         libcutils \
         libui \
-        libEGL
+        libEGL \
+        libskia
 
 LOCAL_C_INCLUDES := $(TOP)/hardware/qcom/display/libgralloc \
+                    $(TOP)/frameworks/base/services/surfaceflinger \
+                    $(TOP)/external/skia/include/core \
+                    $(TOP)/external/skia/include/images
+
 LOCAL_CFLAGS := -DLOG_TAG=\"libQcomUI\"
 
 ifneq ($(call is-vendor-board-platform,QCOM),true)
