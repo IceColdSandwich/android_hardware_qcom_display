@@ -49,6 +49,7 @@
 #define MAX_BYPASS_LAYERS 3
 #define BYPASS_DEBUG 0
 #define BYPASS_INDEX_OFFSET 4
+#define HWC_DEBUG 0
 
 enum BypassState {
     BYPASS_ON,
@@ -1373,6 +1374,21 @@ static int hwc_set(hwc_composer_device_t *dev,
     if(!ctx) {
         LOGE("hwc_set invalid context");
         return -1;
+    }
+
+    if (dpy == NULL && sur == NULL && list == NULL) {
+        // special case: the screen is off, there is nothing to do.
+        LOGD_IF(HWC_DEBUG,"hwc_set screen is off");
+        return 0;
+    } else if (!list) {
+        // allow hwc_set to partially execute here, hack for screen off animation
+        LOGD_IF(HWC_DEBUG,"hwc_set invalid list: attempting hack");
+        EGLBoolean sucess = eglSwapBuffers((EGLDisplay)dpy, (EGLSurface)sur);
+        if (!sucess) {
+            LOGE("hwc_set invalid list and eglSwapBuffers() failed");
+            return HWC_EGL_ERROR;
+        }
+        return 0;
     }
 
     private_hwc_module_t* hwcModule = reinterpret_cast<private_hwc_module_t*>(
