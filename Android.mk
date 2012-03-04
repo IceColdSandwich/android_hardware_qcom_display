@@ -3,7 +3,7 @@
 display-hals := libqcomui libtilerenderer
 
 #libs to be built for QCOM targets only
-ifeq ($(call is-vendor-board-platform,QCOM),true)
+ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
 display-hals += libhwcomposer liboverlay libgralloc libgenlock libcopybit
 endif
 

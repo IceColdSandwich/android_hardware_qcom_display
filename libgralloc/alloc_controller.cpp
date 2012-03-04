@@ -97,6 +97,7 @@ sp<IAllocController> IAllocController::getInstance(bool useMasterHeap)
 }
 
 
+#ifdef USE_ION
 //-------------- IonController-----------------------//
 IonController::IonController()
 {
@@ -181,6 +182,7 @@ sp<IMemAlloc> IonController::getAllocator(int flags)
 
     return memalloc;
 }
+#endif
 
 //-------------- PmemKernelController-----------------------//
 
