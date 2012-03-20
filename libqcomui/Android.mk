@@ -3,7 +3,8 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
         qcom_ui.cpp \
-        utils/profiler.cpp
+        utils/profiler.cpp \
+        utils/IdleTimer.cpp
 
 LOCAL_SHARED_LIBRARIES := \
         libutils \
