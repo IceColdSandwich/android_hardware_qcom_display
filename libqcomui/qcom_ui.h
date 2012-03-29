@@ -36,6 +36,8 @@
 #include <ui/Region.h>
 #include <EGL/egl.h>
 #include <utils/Singleton.h>
+#include <cutils/properties.h>
+#include "../libgralloc/gralloc_priv.h"
 
 using namespace android;
 using android::sp;
@@ -66,13 +68,15 @@ enum {
  */
 enum eLayerAttrib {
     LAYER_UPDATE_STATUS,
+    LAYER_ASYNCHRONOUS_STATUS,
 };
 
 /*
  * Layer Flags
  */
 enum {
-    LAYER_UPDATING = 1<<0,
+    LAYER_UPDATING     = 1<<0,
+    LAYER_ASYNCHRONOUS = 1<<1,
 };
 
 /*
@@ -80,9 +84,12 @@ enum {
  */
 enum {
     HWC_LAYER_NOT_UPDATING      = 0x00000002,
+    HWC_LAYER_ASYNCHRONOUS      = 0x00000004,
     HWC_USE_ORIGINAL_RESOLUTION = 0x10000000,
     HWC_DO_NOT_USE_OVERLAY      = 0x20000000,
     HWC_COMP_BYPASS             = 0x40000000,
+    HWC_USE_EXT_ONLY            = 0x80000000, //Layer displayed on external only
+    HWC_USE_EXT_BLOCK           = 0x01000000, //Layer displayed on external only
     HWC_BYPASS_RESERVE_0        = 0x00000010,
     HWC_BYPASS_RESERVE_1        = 0x00000020,
 };
@@ -93,10 +100,15 @@ enum HWCCompositionType {
     HWC_USE_COPYBIT                // This layer is to be handled by copybit
 };
 
-enum external_display {
+enum external_display_state {
     EXT_DISPLAY_OFF,
     EXT_DISPLAY_HDMI,
     EXT_DISPLAY_WIFI
+};
+
+enum external_display_type {
+    EXT_TYPE_HDMI = 1,
+    EXT_TYPE_WIFI
 };
 
 /*
@@ -181,6 +193,35 @@ private:
 };
 #endif
 
+class QCBaseLayer
+{
+//    int mS3DFormat;
+    int32_t mComposeS3DFormat;
+public:
+    QCBaseLayer()
+    {
+        mComposeS3DFormat = 0;
+    }
+    enum { // S3D formats
+        eS3D_SIDE_BY_SIDE   = 0x10000,
+        eS3D_TOP_BOTTOM     = 0x20000
+    };
+/*
+    virtual status_t setStereoscopic3DFormat(int format) { mS3DFormat = format; return 0; }
+    virtual int getStereoscopic3DFormat() const { return mS3DFormat; }
+ */
+    void setS3DComposeFormat (int32_t hints)
+    {
+        if (hints & HWC_HINT_DRAW_S3D_SIDE_BY_SIDE)
+            mComposeS3DFormat = eS3D_SIDE_BY_SIDE;
+        else if (hints & HWC_HINT_DRAW_S3D_TOP_BOTTOM)
+            mComposeS3DFormat = eS3D_TOP_BOTTOM;
+        else
+            mComposeS3DFormat = 0;
+    }
+    int32_t needsS3DCompose () const { return mComposeS3DFormat; }
+};
+
 /*
  * Function to check if the allocated buffer is of the correct size.
  * Reallocate the buffer with the correct size, if the size doesn't
@@ -202,17 +243,6 @@ int checkBuffer(native_handle_t *buffer_handle, int size, int usage);
  * @return true if the format is supported by the GPU.
  */
 bool isGPUSupportedFormat(int format);
-
-/*
- * Checks if the format is natively supported by the GPU.
- * For now, we use this function to check only if CHECK_FOR_EXTERNAL_FORMAT
- * is set.
- *
- * @param: format to check
- *
- * @return true if the format is supported by the GPU.
- */
-bool isGPUSupportedFormatInHW(int format);
 
 /*
  * Adreno is not optimized for GL_TEXTURE_EXTERNAL_OES
@@ -327,6 +357,41 @@ int qcomuiClearRegion(Region region, EGLDisplay dpy, EGLSurface sur);
  * @return: external display to be enabled
  *
  */
-external_display handleEventHDMI(external_display newEvent, external_display
-                                                                   currEvent);
+external_display_state handleEventHDMI(external_display_type disp,
+                                 external_display_state newState,
+                                 external_display_state currState);
+
+/*
+ * Checks if layers need to be dumped based on system property "debug.sf.dump"
+ * for raw dumps and "debug.sf.dump.png" for png dumps.
+ *
+ * For example, to dump 25 frames in raw format, do,
+ *     adb shell setprop debug.sf.dump 25
+ * Layers are dumped in a time-stamped location: /data/sfdump*.
+ *
+ * To dump 10 frames in png format, do,
+ *     adb shell setprop debug.sf.dump.png 10
+ * To dump another 25 or so frames in raw format, do,
+ *     adb shell setprop debug.sf.dump 26
+ *
+ * To turn off logcat logging of layer-info, set both properties to 0,
+ *     adb shell setprop debug.sf.dump.png 0
+ *     adb shell setprop debug.sf.dump 0
+ *
+ * @return: true if layers need to be dumped (or logcat-ed).
+ */
+bool needToDumpLayers();
+
+/*
+ * Dumps a layer's info into logcat and its buffer into raw/png files.
+ *
+ * @param: moduleCompositionType - Composition type set in hwcomposer module.
+ * @param: listFlags - Flags used in hwcomposer's list.
+ * @param: layerIndex - Index of layer being dumped.
+ * @param: hwLayers - Address of hwc_layer_t to log and dump.
+ *
+ */
+void dumpLayer(int moduleCompositionType, int listFlags, size_t layerIndex,
+                                                    hwc_layer_t hwLayers[]);
+
 #endif // INCLUDE_LIBQCOM_UI

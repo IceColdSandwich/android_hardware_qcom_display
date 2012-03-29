@@ -4,17 +4,18 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
         qcom_ui.cpp
 
-ifeq ($(TARGET_BOARD_PLATFORM),msm7x27a)
-      LOCAL_CFLAGS += -DCHECK_FOR_EXTERNAL_FORMAT
-endif
-
 LOCAL_SHARED_LIBRARIES := \
         libutils \
         libcutils \
         libui \
-        libEGL
+        libEGL \
+        libskia
 
 LOCAL_C_INCLUDES := $(TOP)/hardware/qcom/display/libgralloc \
+                    $(TOP)/frameworks/base/services/surfaceflinger \
+                    $(TOP)/external/skia/include/core \
+                    $(TOP)/external/skia/include/images
+
 LOCAL_CFLAGS := -DLOG_TAG=\"libQcomUI\"
 
 ifneq ($(BOARD_USES_QCOM_HARDWARE),true)
