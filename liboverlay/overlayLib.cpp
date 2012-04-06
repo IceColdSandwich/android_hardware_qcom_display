@@ -19,7 +19,7 @@
 #include "gralloc_priv.h"
 
 #define INTERLACE_MASK 0x80
-#define DEBUG_OVERLAY true
+#define DEBUG_OVERLAY false
 /* Helper functions */
 static inline size_t ALIGN(size_t x, size_t align) {
     return (x + align-1) & ~(align-1);
@@ -642,8 +642,9 @@ bool Overlay::updateOverlaySource(const overlay_buffer_info& info, int orientati
     }
     if (ret) {
         mOVBufferInfo = info;
-    } else
-        LOGE("update failed");
+    } else {
+        //LOGE("update failed");
+    }
     return ret;
 }
 
@@ -1567,7 +1568,7 @@ bool OverlayControlChannel::useVirtualFB() {
 
 bool OverlayControlChannel::setTransform(int value, bool fetch) {
     if (!isChannelUP()) {
-        LOGE("%s: channel is not up", __FUNCTION__);
+        //LOGE("%s: channel is not up", __FUNCTION__);
         return false;
     }
 
