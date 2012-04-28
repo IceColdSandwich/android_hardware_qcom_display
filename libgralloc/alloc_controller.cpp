@@ -65,7 +65,8 @@ static bool canFallback(int compositionType, int usage, bool triedSystem)
         return false;
     if(triedSystem)
         return false;
-    if(usage & (GRALLOC_HEAP_MASK | GRALLOC_USAGE_PROTECTED))
+    if(usage & (GRALLOC_HEAP_MASK | GRALLOC_USAGE_PROTECTED |
+                GRALLOC_USAGE_PRIVATE_CP_BUFFER))
         return false;
     if(usage & (GRALLOC_HEAP_MASK | GRALLOC_USAGE_EXTERNAL_ONLY))
         return false;
@@ -76,7 +77,8 @@ static bool canFallback(int compositionType, int usage, bool triedSystem)
 static bool useUncached(int usage)
 {
     // System heaps cannot be uncached
-    if(usage & GRALLOC_USAGE_PRIVATE_SYSTEM_HEAP)
+    if(usage & (GRALLOC_USAGE_PRIVATE_SYSTEM_HEAP |
+                GRALLOC_USAGE_PRIVATE_IOMMU_HEAP))
         return false;
     if (usage & GRALLOC_USAGE_PRIVATE_UNCACHED)
         return true;
@@ -137,7 +139,7 @@ int IonController::allocate(alloc_data& data, int usage,
     if(usage & GRALLOC_USAGE_PRIVATE_CAMERA_HEAP)
         ionFlags |= ION_HEAP(ION_CAMERA_HEAP_ID);
 
-    if(usage & GRALLOC_USAGE_PROTECTED)
+    if(usage & GRALLOC_USAGE_PRIVATE_CP_BUFFER)
         ionFlags |= ION_SECURE;
 
     if(usage & GRALLOC_USAGE_PRIVATE_DO_NOT_MAP)
@@ -146,11 +148,11 @@ int IonController::allocate(alloc_data& data, int usage,
         data.allocType  &=  ~(private_handle_t::PRIV_FLAGS_NOT_MAPPED);
 
     // if no flags are set, default to
-    // EBI heap, so that bypass can work
+    // SF + IOMMU heaps, so that bypass can work
     // we can fall back to system heap if
     // we run out.
     if(!ionFlags)
-        ionFlags = ION_HEAP(ION_SF_HEAP_ID);
+        ionFlags = ION_HEAP(ION_SF_HEAP_ID) | ION_HEAP(ION_IOMMU_HEAP_ID);
 
     data.flags = ionFlags;
     ret = mIonAlloc->alloc_buffer(data);
@@ -412,7 +414,7 @@ int alloc_buffer(private_handle_t **pHnd, int w, int h, int format, int usage)
      data.offset = 0;
      data.size = getBufferSizeAndDimensions(w, h, format, alignedw, alignedh);
      data.align = getpagesize();
-     data.uncached = true;
+     data.uncached = useUncached(usage);
      int allocFlags = usage;
 
      int err = sAlloc->allocate(data, allocFlags, 0);

@@ -90,7 +90,11 @@ int gpu_context_t::gralloc_alloc_framebuffer_locked(size_t size, int usage,
 
     const uint32_t bufferMask = m->bufferMask;
     const uint32_t numBuffers = m->numBuffers;
-    const size_t bufferSize = m->finfo.line_length * m->info.yres;
+    size_t bufferSize = m->finfo.line_length * m->info.yres;
+
+    //adreno needs FB size to be page aligned
+    bufferSize = roundUpToPageSize(bufferSize);
+
     if (numBuffers == 1) {
         // If we have only one buffer, we never use page-flipping. Instead,
         // we return a regular buffer which will be memcpy'ed to the main
@@ -230,7 +234,8 @@ int gpu_context_t::alloc_impl(int w, int h, int format, int usage,
     // All buffers marked as protected or for external
     // display need to go to overlay
     if ((usage & GRALLOC_USAGE_EXTERNAL_DISP) ||
-        (usage & GRALLOC_USAGE_PROTECTED)) {
+        (usage & GRALLOC_USAGE_PROTECTED) ||
+        (usage & GRALLOC_USAGE_PRIVATE_CP_BUFFER)) {
             bufferType = BUFFER_TYPE_VIDEO;
     }
     int err;

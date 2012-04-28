@@ -49,7 +49,7 @@
 #include <cutils/properties.h>
 #endif
 
-#include <qcom_ui.h>
+#include <utils/profiler.h>
 
 #define FB_DEBUG 0
 
@@ -100,7 +100,7 @@ static int fb_setSwapInterval(struct framebuffer_device_t* dev,
             int interval)
 {
     char pval[PROPERTY_VALUE_MAX];
-    property_get("debug.gr.swapinterval", pval, "-1");
+    property_get("debug.egl.swapinterval", pval, "-1");
     int property_interval = atoi(pval);
     if (property_interval >= 0)
         interval = property_interval;
@@ -636,10 +636,14 @@ int mapFrameBufferLocked(struct private_module_t* module)
         info.transp.length  = 0;
         module->fbFormat = HAL_PIXEL_FORMAT_RGB_565;
     }
+
+    //adreno needs 4k aligned offsets. Max hole size is 4096-1
+    int  size = roundUpToPageSize(info.yres * info.xres * (info.bits_per_pixel/8));
+
     /*
      * Request NUM_BUFFERS screens (at lest 2 for page flipping)
      */
-    int numberOfBuffers = (int)(finfo.smem_len/(info.yres * info.xres * (info.bits_per_pixel/8)));
+    int numberOfBuffers = (int)(finfo.smem_len/size);
     LOGV("num supported framebuffers in kernel = %d", numberOfBuffers);
 
     if (property_get("debug.gr.numframebuffers", property, NULL) > 0) {
@@ -651,20 +655,22 @@ int mapFrameBufferLocked(struct private_module_t* module)
     if (numberOfBuffers > NUM_FRAMEBUFFERS_MAX)
         numberOfBuffers = NUM_FRAMEBUFFERS_MAX;
 
-    LOGE("We support %d buffers", numberOfBuffers);
+    LOGV("We support %d buffers", numberOfBuffers);
 
-    info.yres_virtual = info.yres * numberOfBuffers;
+    //consider the included hole by 4k alignment
+    uint32_t line_length = (info.xres * info.bits_per_pixel / 8);
+    info.yres_virtual = (size * numberOfBuffers) / line_length;
 
     uint32_t flags = PAGE_FLIP;
     if (ioctl(fd, FBIOPUT_VSCREENINFO, &info) == -1) {
-        info.yres_virtual = info.yres;
+        info.yres_virtual = size / line_length;
         flags &= ~PAGE_FLIP;
         LOGW("FBIOPUT_VSCREENINFO failed, page flipping not supported");
     }
 
-    if (info.yres_virtual < info.yres * 2) {
+    if (info.yres_virtual < ((size * 2) / line_length) ) {
         // we need at least 2 for page-flipping
-        info.yres_virtual = info.yres;
+        info.yres_virtual = size / line_length;
         flags &= ~PAGE_FLIP;
         LOGW("page flipping not supported (yres_virtual=%d, requested=%d)",
                 info.yres_virtual, info.yres*2);
@@ -769,13 +775,13 @@ int mapFrameBufferLocked(struct private_module_t* module)
      */
 
     int err;
-    size_t fbSize = roundUpToPageSize(finfo.line_length * info.yres_virtual);
-    module->framebuffer = new private_handle_t(fd, fbSize,
-            private_handle_t::PRIV_FLAGS_USES_PMEM, BUFFER_TYPE_UI, module->fbFormat, info.xres, info.yres);
-
     module->numBuffers = info.yres_virtual / info.yres;
     module->bufferMask = 0;
-
+    //adreno needs page aligned offsets. Align the fbsize to pagesize.
+    size_t fbSize = roundUpToPageSize(finfo.line_length * info.yres) * module->numBuffers;
+    module->framebuffer = new private_handle_t(fd, fbSize,
+                            private_handle_t::PRIV_FLAGS_USES_PMEM, BUFFER_TYPE_UI,
+                            module->fbFormat, info.xres, info.yres);
     void* vaddr = mmap(0, fbSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
     if (vaddr == MAP_FAILED) {
         LOGE("Error mapping the framebuffer (%s)", strerror(errno));

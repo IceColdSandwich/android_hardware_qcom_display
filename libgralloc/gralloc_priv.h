@@ -85,6 +85,14 @@ enum {
      * other EXTERNAL_ONLY buffers are available. Used during suspend.
      */
     GRALLOC_USAGE_EXTERNAL_BLOCK          =       0x00020000,
+
+    /* Use this flag to request content protected buffers. Please note
+     * that this flag is different from the GRALLOC_USAGE_PROTECTED flag
+     * which can be used for buffers that are not secured for DRM
+     * but still need to be protected from screen captures
+     * 0x00040000 is reserved and these values are subject to change.
+     */
+    GRALLOC_USAGE_PRIVATE_CP_BUFFER       =       0x00080000,
 };
 
 enum {
@@ -380,7 +388,24 @@ struct private_handle_t {
                 h->numInts != sNumInts || h->numFds != sNumFds ||
                 hnd->magic != sMagic)
         {
-            LOGE("invalid gralloc handle (at %p)", h);
+            LOGE("Invalid gralloc handle (at %p): "
+                "ver(%d/%d) ints(%d/%d) fds(%d/%d) magic(%c%c%c%c/%c%c%c%c)",
+                h,
+                h ? h->version : -1, sizeof(native_handle),
+                h ? h->numInts : -1, sNumInts,
+                h ? h->numFds : -1, sNumFds,
+                hnd ? (((hnd->magic >> 24) & 0xFF)?
+                        ((hnd->magic >> 24) & 0xFF) : '-') : '?',
+                hnd ? (((hnd->magic >> 16) & 0xFF)?
+                        ((hnd->magic >> 16) & 0xFF) : '-') : '?',
+                hnd ? (((hnd->magic >> 8) & 0xFF)?
+                        ((hnd->magic >> 8) & 0xFF) : '-') : '?',
+                hnd ? (((hnd->magic >> 0) & 0xFF)?
+                        ((hnd->magic >> 0) & 0xFF) : '-') : '?',
+                (sMagic >> 24) & 0xFF,
+                (sMagic >> 16) & 0xFF,
+                (sMagic >> 8) & 0xFF,
+                (sMagic >> 0) & 0xFF);
             return -EINVAL;
         }
         return 0;
