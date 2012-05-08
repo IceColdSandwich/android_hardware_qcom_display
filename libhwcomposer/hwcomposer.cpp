@@ -168,6 +168,7 @@ static inline int max(const int& a, const int& b) {
 }
 #ifdef COMPOSITION_BYPASS
 static void timeout_handler(void *udata) {
+    LOGD("Comp bypass timeout_handler...");
     struct hwc_context_t* ctx = (struct hwc_context_t*)(udata);
 
     if(!ctx) {
@@ -182,8 +183,9 @@ static void timeout_handler(void *udata) {
         return;
     }
     /* Trigger SF to redraw the current frame */
-    proc->invalidate(proc);
     ctx->idleTimeOut = true;
+    proc->invalidate(proc);
+    LOGD("Comp bypass timeout_handler...Done");
 }
 
 void setLayerbypassIndex(hwc_layer_t* layer, const int bypass_index)
