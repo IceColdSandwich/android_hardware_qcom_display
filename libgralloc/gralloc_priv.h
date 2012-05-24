@@ -298,10 +298,12 @@ struct private_module_t {
         PRIV_MIN_SWAP_INTERVAL = 0,
         PRIV_MAX_SWAP_INTERVAL = 1,
     };
-#if defined(__cplusplus) && defined(HDMI_DUAL_DISPLAY)
+#if defined(__cplusplus)
+#if defined(HDMI_DUAL_DISPLAY)
     Overlay* pobjOverlay;
     int orientation;
-    bool videoOverlay;
+    int videoOverlay; // VIDEO_OVERLAY - 2D or 3D
+    int secureVideoOverlay; // VideoOverlay is secure
     uint32_t currentOffset;
     int enableHDMIOutput; // holds the type of external display
     bool trueMirrorSupport;
@@ -312,6 +314,10 @@ struct private_module_t {
     hdmi_mirroring_state hdmiMirroringState;
     pthread_mutex_t overlayLock;
     pthread_cond_t overlayPost;
+#endif
+    pthread_mutex_t bufferPostLock;
+    pthread_cond_t bufferPostCond;
+    bool bufferPostDone;
 #endif
 };
 
@@ -388,7 +394,7 @@ struct private_handle_t {
                 h->numInts != sNumInts || h->numFds != sNumFds ||
                 hnd->magic != sMagic)
         {
-            LOGE("Invalid gralloc handle (at %p): "
+            LOGD("Invalid gralloc handle (at %p): "
                 "ver(%d/%d) ints(%d/%d) fds(%d/%d) magic(%c%c%c%c/%c%c%c%c)",
                 h,
                 h ? h->version : -1, sizeof(native_handle),

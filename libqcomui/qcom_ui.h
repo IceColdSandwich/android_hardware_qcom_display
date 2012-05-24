@@ -80,6 +80,13 @@ enum {
 };
 
 /*
+ * Layer Transformation - refers to Layer::setGeometry()
+ */
+#define SHIFT_SRC_TRANSFORM  4
+#define SRC_TRANSFORM_MASK   0x00F0
+#define FINAL_TRANSFORM_MASK 0x000F
+
+/*
  * Flags set by the layer and sent to HWC
  */
 enum {
@@ -106,6 +113,30 @@ enum external_display_type {
     EXT_TYPE_WIFI
 };
 
+/* Events to the Display HAL perform function
+   As of now used for external display related such as
+   connect, disconnect, orientation, video started etc.,
+*/
+enum {
+    EVENT_EXTERNAL_DISPLAY,     // External display on/off Event
+    EVENT_VIDEO_OVERLAY,        // Video Overlay start/stop Event
+    EVENT_ORIENTATION_CHANGE,   // Orientation Change Event
+    EVENT_OVERLAY_STATE_CHANGE, // Overlay State Change Event
+    EVENT_OPEN_SECURE_START,    // Start of secure session setup config by stagefright
+    EVENT_OPEN_SECURE_END,      // End of secure session setup config by stagefright
+    EVENT_CLOSE_SECURE_START,   // Start of secure session teardown config
+    EVENT_CLOSE_SECURE_END,     // End of secure session teardown config
+    EVENT_RESET_POSTBUFFER,     // Reset post framebuffer mutex
+    EVENT_WAIT_POSTBUFFER,      // Wait until post framebuffer returns
+};
+
+// Video information sent to framebuffer HAl
+// used for handling UI mirroring.
+enum {
+    VIDEO_OVERLAY_ENDED = 0,
+    VIDEO_2D_OVERLAY_STARTED,
+    VIDEO_3D_OVERLAY_STARTED
+};
 /*
  * Structure to hold the buffer geometry
  */
