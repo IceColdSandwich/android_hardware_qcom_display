@@ -601,13 +601,17 @@ bool Overlay::updateOverlaySource(const overlay_buffer_info& info, int flags) {
     }
 
     // disable waitForVsync on HDMI, since we call the wait ioctl
-    int ovFlagsExternal = 0;
-    int ovFlags[2] = {flags, ovFlagsExternal};
+    // ensure that the en_fb flag setting is in-tact
+    int ovFlags[2] = {flags, (flags & DISABLE_FRAMEBUFFER_FETCH)};
 
     if (!geometryChanged) {
-        // Only update the primary channel - we only need to update the
+        // Update the primary channel - we only need to update the
         // wait/no-wait flags
         if (objOvCtrlChannel[0].isChannelUP()) {
+            // Update the secondary channel - We only need to update is_fg flag
+            if (objOvCtrlChannel[1].isChannelUP()) {
+                objOvCtrlChannel[1].updateOverlayFlags(flags & DISABLE_FRAMEBUFFER_FETCH);
+            }
             return objOvCtrlChannel[0].updateOverlayFlags(flags);
         }
     }
@@ -674,16 +678,14 @@ bool Overlay::setSource(const overlay_buffer_info& info, int orientation,
     }
 
     if (stateChange) {
-        if (mState != -1) {
-            if ((mState == OV_3D_VIDEO_3D_PANEL) ||
-                (mState == OV_3D_VIDEO_3D_TV) ||
-                (newState == OV_3D_VIDEO_3D_PANEL) ||
-                (newState == OV_3D_VIDEO_3D_TV)) {
-                LOGI("S3D state transition: closing the channels");
-                closeChannel();
-                isHDMIStateChange = false;
-                isS3DFormatChange = false;
-            }
+        if (isS3DFormatChange ||
+            (mState == OV_3D_VIDEO_3D_PANEL) ||
+            (mState == OV_3D_VIDEO_3D_TV) ||
+            (newState == OV_3D_VIDEO_3D_PANEL) ||
+            (newState == OV_3D_VIDEO_3D_TV)) {
+            LOGI("S3D state transition: closing the channels");
+            closeChannel();
+            isHDMIStateChange = false;
         }
         mExternalDisplay = hdmiConnected;
         mState = newState;
@@ -704,10 +706,8 @@ bool Overlay::setSource(const overlay_buffer_info& info, int orientation,
                     closeExternalChannel();
                     break;
                 }
-                else if(!isS3DFormatChange)
-                    return startChannel(info, FRAMEBUFFER_0, noRot, false,
-                            mS3DFormat, VG0_PIPE, flags, num_buffers);
-                break;
+                return startChannel(info, FRAMEBUFFER_0, noRot, false,
+                        mS3DFormat, VG0_PIPE, flags, num_buffers);
             case OV_3D_VIDEO_3D_PANEL:
                 if (sHDMIAsPrimary) {
                     noRot = true;
@@ -738,7 +738,7 @@ bool Overlay::setSource(const overlay_buffer_info& info, int orientation,
                         LOGE("%s:failed to open channel %d", __func__, VG1_PIPE);
                         return false;
                     }
-                } else if (!isS3DFormatChange) {
+                } else {
                     for (int i=0; i<NUM_CHANNELS; i++) {
                         fbnum = i;
                         //start two channels for one for primary and external.
@@ -1484,6 +1484,16 @@ bool OverlayControlChannel::closeControlChannel() {
 
     mOVInfo.z_order = NO_PIPE;
     mFD = -1;
+    mNoRot = false;
+    mFBNum = -1;
+    mFBWidth = 0;
+    mFBHeight = 0;
+    mFBbpp = 0;
+    mFBystride = 0;
+    mFormat = 0;
+    mSize = 0;
+    mOrientation = 0;
+    mFormat3D = 0;
 
     return true;
 }
@@ -1914,6 +1924,13 @@ bool OverlayDataChannel::closeDataChannel() {
 
     mNumBuffers = 0;
     mCurrentItem = 0;
+    mNoRot = false;
+    mSecure = false;
+    mPmemAddr = 0;
+    mPmemOffset = 0;
+    mNewPmemOffset = 0;
+    mUpdateDataChannel = false;
+    mBufferType = 0;
 
     return true;
 }

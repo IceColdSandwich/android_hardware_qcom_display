@@ -27,59 +27,62 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "IdleTimer.h"
-TimerHandler IdleTimer::mHandler = NULL;
+#include "IdleInvalidator.h"
+#include <unistd.h>
 
-int IdleTimer::create(TimerHandler reg_handler, void* user_data) {
+#define II_DEBUG 0
 
-    /* store registerd handler */
+static const char *threadName = "Invalidator";
+InvalidatorHandler IdleInvalidator::mHandler = NULL;
+android::sp<IdleInvalidator> IdleInvalidator::sInstance(0);
+
+IdleInvalidator::IdleInvalidator(): Thread(false), mHwcContext(0),
+    mSleepAgain(false), mSleepTime(0) {
+    LOGE_IF(II_DEBUG, "shs %s", __func__);
+}
+
+int IdleInvalidator::init(InvalidatorHandler reg_handler, void* user_data,
+    unsigned int idleSleepTime) {
+    LOGE_IF(II_DEBUG, "shs %s", __func__);
+
+    /* store registered handler */
     mHandler = reg_handler;
-
-
-    mSAction.sa_flags = SA_SIGINFO;
-    mSAction.sa_sigaction = (TimerFP)(&IdleTimer::timer_cb);
-    sigemptyset(&mSAction.sa_mask);
-    if (sigaction(SIGRTMIN, &mSAction, NULL) == -1) {
-        LOGE("%s: IdleTimer::sigaction failed!!", __FUNCTION__);
-        return -1;
-    }
-
-    /* start the timer */
-    mSEvent.sigev_notify = SIGEV_SIGNAL;
-    mSEvent.sigev_signo = SIGRTMIN;
-    mSEvent.sigev_value.sival_ptr = user_data;
-    if (timer_create(CLOCK_REALTIME, &mSEvent, &mID) == -1) {
-        LOGE("%s: IdleTimer::timer_create failed!!", __FUNCTION__);
-        return -1;
-    }
-
+    mHwcContext = user_data;
+    mSleepTime = idleSleepTime; //Time in millis
     return 0;
 }
 
-int IdleTimer::reset() {
+bool IdleInvalidator::threadLoop() {
+    LOGE_IF(II_DEBUG, "shs %s", __func__);
+    usleep(mSleepTime * 1000);
+    if(mSleepAgain) {
+        //We need to sleep again!
+        mSleepAgain = false;
+        return true;
+    }
 
-    /* clear signal mask */
-    sigemptyset(&mSAction.sa_mask);
-    if (sigaction(SIGRTMIN, &mSAction, NULL) == -1) {
-        LOGE("%s: IdleTimer::sigaction failed!!", __FUNCTION__);
-        return -1;
-    }
-    /* rearm timer */
-    if (timer_settime(mID, 0,  &mSpec, NULL) == -1) {
-        LOGE("%s: IdleTimer::timer_settime failed!!",__FUNCTION__);
-        return -1;
-    }
-    return 0;
+    mHandler((void*)mHwcContext);
+    return false;
 }
 
-void IdleTimer::setFreq(unsigned long freq_msecs) {
-    mSpec.it_value.tv_sec = freq_msecs / 1000;
-    mSpec.it_value.tv_nsec = 0;
-    mSpec.it_interval.tv_sec = mSpec.it_value.tv_sec;
-    mSpec.it_interval.tv_nsec = mSpec.it_value.tv_nsec;
+int IdleInvalidator::readyToRun() {
+    LOGE_IF(II_DEBUG, "shs %s", __func__);
+    return 0; /*NO_ERROR*/
 }
 
-void IdleTimer::timer_cb(int sig, siginfo_t* si, void* uc) {
-    mHandler((void*)si->si_value.sival_ptr);
-    signal(sig, SIG_IGN);
+void IdleInvalidator::onFirstRef() {
+    LOGE_IF(II_DEBUG, "shs %s", __func__);
+}
+
+void IdleInvalidator::markForSleep() {
+    mSleepAgain = true;
+    //Triggers the threadLoop to run, if not already running.
+    run(threadName, android::PRIORITY_AUDIO);
+}
+
+IdleInvalidator *IdleInvalidator::getInstance() {
+    LOGE_IF(II_DEBUG, "shs %s", __func__);
+    if(sInstance.get() == NULL)
+        sInstance = new IdleInvalidator();
+    return sInstance.get();
 }
