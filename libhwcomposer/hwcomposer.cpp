@@ -353,6 +353,26 @@ void calculate_crop_rects(hwc_rect_t& crop, hwc_rect_t& dst, int hw_w, int hw_h)
                      crop_x, crop_y, crop_w, crop_h,dst_x, dst_y, dst_w, dst_h);
 }
 
+//If displayframe is out of screen bounds, calculates
+//valid displayFrame & source crop corresponding to it.
+static void correct_crop_rects(const framebuffer_device_t* fbDev,
+                        hwc_rect_t& sourceCrop, hwc_rect_t& displayFrame,
+                        int transform) {
+    if (!isValidDestination(fbDev,displayFrame)) {
+        if (transform & HWC_TRANSFORM_ROT_90) {
+            swap(sourceCrop.left,sourceCrop.top);
+            swap(sourceCrop.right,sourceCrop.bottom);
+            calculate_crop_rects(sourceCrop,displayFrame,
+                                    fbDev->width,fbDev->height);
+            swap(sourceCrop.left,sourceCrop.top);
+            swap(sourceCrop.right,sourceCrop.bottom);
+        } else {
+            calculate_crop_rects(sourceCrop,displayFrame,
+                    fbDev->width,fbDev->height);
+        }
+    }
+}
+
 #ifdef COMPOSITION_BYPASS
 /*
  * Configures pipe(s) for composition bypass
@@ -457,25 +477,39 @@ bool isMDPSupported( const hwc_layer_list_t* list ) {
     // Blending can be ignored for layer with zorder 0.
     // The only RGB pipe which can handle alpha downscaling
     // is hardcoded for layer with zorder 1 based on the use
-    // cases profiled. If layer with zorder 2 needs alpha
-    // downscaling, bypass is not possible
+    // cases profiled.
 
-    if(list->numHwLayers < 3)
-        return true;
+    for(int layer_index = 1; layer_index < list->numHwLayers; layer_index++) {
 
-    const hwc_layer_t* layer = &list->hwLayers[2];
-    bool needsBlending = layer->blending != HWC_BLENDING_NONE;
+        const hwc_layer_t* layer = &list->hwLayers[layer_index];
+        bool needsBlending = layer->blending != HWC_BLENDING_NONE;
 
-    int dst_w, dst_h;
-    getLayerResolution(layer, dst_w, dst_h);
+        int dst_w, dst_h;
+        getLayerResolution(layer, dst_w, dst_h);
 
-    hwc_rect_t sourceCrop = layer->sourceCrop;
-    const int src_w = sourceCrop.right - sourceCrop.left;
-    const int src_h = sourceCrop.bottom - sourceCrop.top;
+        hwc_rect_t sourceCrop = layer->sourceCrop;
+        const int src_w = sourceCrop.right - sourceCrop.left;
+        const int src_h = sourceCrop.bottom - sourceCrop.top;
 
-    if(((src_w > dst_w) || (src_h > dst_h)) && needsBlending)
-        return false;
+        if(((src_w > dst_w) || (src_h > dst_h)) && needsBlending){
 
+            if(not FrameBufferInfo::getInstance()->canSupportTrueMirroring()){
+                /* If the target MDP version is less than 4.2, we
+                 * cannot handle alpha downscaling. In such cases bypass is
+                 * not possible and we return false.*/
+
+                /* The above condition is round-about way
+                 * of identifying if the target version is less than 4.2 */
+                return false;
+            }
+            if( layer_index != 1) {
+                /* We ignore layer with z-order 1 since it is assigned
+                 * to RGB2 pipe which handles downscaling with alpha
+                 * in 4.2 and above*/
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -789,21 +823,6 @@ static int prepareOverlay(hwc_context_t *ctx, hwc_layer_t *layer, const int flag
 
         hwc_rect_t sourceCrop = layer->sourceCrop;
         hwc_rect_t displayFrame = layer->displayFrame;
-        if(!isValidDestination(hwcModule->fbDevice, layer->displayFrame)) {
-            if(layer->transform & HWC_TRANSFORM_ROT_90) {
-                swap(layer->sourceCrop.left,layer->sourceCrop.top);
-                swap(layer->sourceCrop.right,layer->sourceCrop.bottom);
-                calculate_crop_rects(layer->sourceCrop,layer->displayFrame,
-                                        hwcModule->fbDevice->width,
-                                        hwcModule->fbDevice->height);
-                swap(layer->sourceCrop.left,layer->sourceCrop.top);
-                swap(layer->sourceCrop.right,layer->sourceCrop.bottom);
-            } else {
-                calculate_crop_rects(layer->sourceCrop,layer->displayFrame,
-                                        hwcModule->fbDevice->width,
-                                        hwcModule->fbDevice->height);
-            }
-        }
 
         ret = ovLibObject->setCrop(sourceCrop.left, sourceCrop.top,
                                   (sourceCrop.right - sourceCrop.left),
@@ -1186,6 +1205,10 @@ static int hwc_prepare(hwc_composer_device_t *dev, hwc_layer_list_t* list) {
                 flags |= (1 == list->numHwLayers) ? DISABLE_FRAMEBUFFER_FETCH : 0;
                 int videoStarted = VIDEO_2D_OVERLAY_STARTED;
                 setVideoOverlayStatusInGralloc(ctx, videoStarted);
+                correct_crop_rects(hwcModule->fbDevice,
+                                        list->hwLayers[i].sourceCrop,
+                                        list->hwLayers[i].displayFrame,
+                                        list->hwLayers[i].transform);
 #ifdef USE_OVERLAY
 		if(prepareOverlay(ctx, &(list->hwLayers[i]), flags) == 0) {
 		      list->hwLayers[i].compositionType = HWC_USE_OVERLAY;
@@ -1294,7 +1317,7 @@ struct range {
     int end;
 };
 struct region_iterator : public copybit_region_t {
-    
+
     region_iterator(hwc_region_t region) {
         mRegion = region;
         r.end = region.numRects;
@@ -1320,9 +1343,9 @@ private:
         }
         return 0;
     }
-    
+
     hwc_region_t mRegion;
-    mutable range r; 
+    mutable range r;
 };
 
 static int drawLayerUsingCopybit(hwc_composer_device_t *dev, hwc_layer_t *layer, EGLDisplay dpy,
@@ -1682,7 +1705,7 @@ static int hwc_set(hwc_composer_device_t *dev,
             if (ctx->hwcOverlayStatus == HWC_OVERLAY_OPEN)
                 ctx->hwcOverlayStatus =  HWC_OVERLAY_PREPARE_TO_CLOSE;
     }
-    
+
 
     bool canSkipComposition = list && list->flags & HWC_SKIP_COMPOSITION;
 
@@ -1726,9 +1749,9 @@ static int hwc_set(hwc_composer_device_t *dev,
             if(ctx->bypassState == BYPASS_OFF_PENDING)
               ctx->bypassState = BYPASS_OFF;
 #endif
-
-            CALC_FPS();
         }
+    } else {
+       CALC_FPS();
     }
 
 #ifdef COMPOSITION_BYPASS
