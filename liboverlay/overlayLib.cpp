@@ -210,8 +210,8 @@ int ZOrderManager::getZ(int fbnum){
              break;
     }
     mPipesInuse++;
-    LOGE("getZ: return zorder = %d for fbdev = %d, pipesinUse = %d",
-            zorder, fbnum, mPipesInuse);
+    //LOGE("getZ: return zorder = %d for fbdev = %d, pipesinUse = %d",
+    //        zorder, fbnum, mPipesInuse);
     return zorder;
 }
 
@@ -220,22 +220,22 @@ void ZOrderManager::decZ(int fbnum, int zorder){
    switch(fbnum) {
        case FRAMEBUFFER_0:
            LOG_ASSERT(!mFB0Pipes[zorder],"channel with ZOrder does not exist");
-           LOGE("decZ: freeing the pipe with zorder = %d for fbdev = %d", zorder, fbnum);
+           //LOGE("decZ: freeing the pipe with zorder = %d for fbdev = %d", zorder, fbnum);
            mFB0Pipes[zorder] = false;
            break;
        case FRAMEBUFFER_1:
        case FRAMEBUFFER_2:
            LOG_ASSERT(!mFB1Pipes[zorder],"channel with ZOrder does not exist");
-           LOGE("decZ: freeing the pipe with zorder = %d for fbdev = %d", zorder, fbnum);
+           //LOGE("decZ: freeing the pipe with zorder = %d for fbdev = %d", zorder, fbnum);
            mFB1Pipes[zorder] = false;
            break;
        default:
-           LOGE("decZ: Invalid framebuffer ");
+           //LOGE("decZ: Invalid framebuffer ");
            break;
     }
     if(mPipesInuse > 0)
         mPipesInuse--;
-    LOGE("decZ: Pipes in use  = %d", mPipesInuse);
+    //LOGE("decZ: Pipes in use  = %d", mPipesInuse);
 }
 
 bool overlay::isHDMIConnected () {
@@ -344,7 +344,7 @@ unsigned int overlay::getOverlayConfig (unsigned int format3D, bool poll,
         } else
             curState = OV_2D_VIDEO_ON_TV;
     } else {
-        LOGD("%s: HDMI not connected...", __FUNCTION__);
+        //LOGD("%s: HDMI not connected...", __FUNCTION__);
         if(format3D) {
             if (usePanel3D())
                 curState = OV_3D_VIDEO_3D_PANEL;
@@ -437,7 +437,7 @@ bool Overlay::startChannel(const overlay_buffer_info& info, int fbnum,
                                                        norot, uichannel,
                                                        format3D, zorder, flags);
     if (!mChannelUP) {
-        LOGE("startChannel for fb%d failed", fbnum);
+        //LOGE("startChannel for fb%d failed", fbnum);
         mState = -1;
         return mChannelUP;
     }
@@ -1378,7 +1378,7 @@ bool OverlayControlChannel::startOVRotatorSessions(
 
         int result = ioctl(mRotFD, MSM_ROTATOR_IOCTL_START, &mRotInfo);
         if (result) {
-            reportError("Rotator session failed");
+            //reportError("Rotator session failed");
             dump(mRotInfo);
             ret = false;
         }

@@ -822,7 +822,7 @@ static int prepareOverlay(hwc_context_t *ctx, hwc_layer_t *layer, const int flag
         ret = ovLibObject->setSource(info, layer->transform,
                             hdmiConnected, flags);
         if (!ret) {
-            LOGE("prepareOverlay setSource failed");
+            //LOGE("prepareOverlay setSource failed");
             return -1;
         }
 
